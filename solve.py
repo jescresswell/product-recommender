@@ -1,32 +1,41 @@
 import numpy as np
+
+# These are the matrix completion algorithms
 from fancyimpute import NuclearNormMinimization, KNN, MatrixFactorization
 
-data = np.genfromtxt('query_result.csv', delimiter=',', dtype=None) #Read entire CSV into array
+data = np.genfromtxt('query_result.csv', delimiter=',', dtype=None) #  Read entire CSV into array
+# First column is customer ID, Last column is total purchases. Drop ID's.
 
-unnorm= data[1:,1:] #Last row is normalization ... need to change norm.. somehow?  Max of each row?
+unnorm= data[1:,1:]
 incompl = []
 
+# Some customers haven't bought anything, remove them.
+# Normalize each customer's purchases by their totals, rounding to multiples of 0.2 to reduce matrix rank.
 for el in unnorm:
-    if float(el[-1]) != float(0):# remove rows which have no information
-        #incompl.append([float(x)/float(el[-1]) if float(el[-1]) !=0 else 0 for x in el[:-1]]) #Does norm even matter??
-        #incompl.append([float(x) for x in el[:-1]])
+    if float(el[-1]) != float(0):  # remove rows which have no information
         maxn = max([float(x) for x in el[:-1]])
-        #incompl.append([float(x)/maxn if float(maxn) !=0 else 0 for x in el[:-1]])
-        incompl.append([round(float(x)/maxn*5)/5 if float(maxn) !=0 else 0 for x in el[:-1]]) #Round to nearest 0.2n
+        incompl.append([round(float(x)/maxn*5)/5 if float(maxn) !=0 else 0 for x in el[:-1]])
 
 incompl= np.asarray(incompl)
 data_rank=np.linalg.matrix_rank(incompl)
-incompl[incompl == 0] = np.nan
-np.savetxt("normed.csv", incompl, delimiter=",") #Save the formatted matrix for comparison after we remove extra entries for bootstrapping
 
+# Now we treat zero entries as unobserved and will use matrix completion to fill them in.
+incompl[incompl == 0] = np.nan
+# Save the formatted matrix for comparison after we remove extra entries for bootstrapping.
+np.savetxt("normed.csv", incompl, delimiter=",")
+
+# Create matrix indicating where zero entries are.
 mask = np.isnan(incompl)
-solver = NuclearNormMinimization(require_symmetric_solution=False, min_value= 0, max_value=1,fast_but_approximate=False)
-#solver = KNN(k=3, min_value=0, max_value=1) #This seems to have problems with overlaps, see errors?
-#solver = MatrixFactorization(min_value = 0, max_value=1) #Similar to a netflix algo
+
+# There are several matrix completion algorithms available. Uncomment one to be used.
+solver = NuclearNormMinimization(require_symmetric_solution=False, min_value= 0, max_value=1,fast_but_approximate=True)
+# solver = KNN(k=3, min_value=0, max_value=1) #This seems to have problems with overlaps, see errors?
+# solver = MatrixFactorization(min_value = 0, max_value=1) #Similar to a netflix algo
 solved = solver.complete(incompl)
-#solved = [np.round(el*5)/5 for el in solved] #This just made things worse, i.e., higher rank solution
+
 np.savetxt("solved.csv", solved, delimiter=",")
-np.savetxt("mask.csv", mask, delimiter=",") #ones where we reconstructed the data, zeros where we already had enteries
+# ones where we reconstructed the data, zeros where we already had entries
+np.savetxt("mask.csv", mask, delimiter=",")
 # u,s,v = np.linalg.svd(solved)
 # print(s)
 #
